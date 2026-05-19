@@ -31,3 +31,11 @@ investment recommendations for stocks.
 | Version Control | GitHub |
 
 ## Pipeline
+
+## Project Status
+
+🚧 In development — Summer 2026
+
+## Author
+
+Raphael Salamon — Penn State University, Computer Science Class of 2028
