@@ -10,7 +10,7 @@ def search_ticker( ticker,company_name):
             'https://feeds.apnews.com/apnews/business',#associated_press_url
             ]
     
-    headlines=[] #result array
+    headlines=[] #headlines array
 
     ticker_lower=ticker.lower() # ticker is lowercased
     company_name_lower=company_name.lower() #company_name
@@ -20,43 +20,15 @@ def search_ticker( ticker,company_name):
             for entry in feed.entries: #loops through each entry, adds title, link and published date 
                 title=entry.title.lower() # lowercase each title
                 summary=entry.get('summary','').lower() # get a summary
-                print("CHECKING:", title)
-                print("SUMMARY:", summary[:100])
-                print("---")
                  
                 if re.search(rf'\b{ticker_lower}\b',title) or re.search(rf'\b{ticker_lower}\b',summary) or re.search(rf'\b{company_name_lower}\b',summary) or re.search(rf'\b{company_name_lower}\b',title):
+                    # we check if the ticker or the company's name appears explicitly in the title or summary
+                     # appending the title, link and published info to the headlines array
                     headlines.append({
                         'title': entry.title,
                         'link': entry.link,
                         'published': entry.get('published','N/A')
                     })
-
-
-                # if re.search(rf'\b{ticker_lower}\b',title):
-                #         headlines.append({
-                #         'title': entry.title,
-                #         'link': entry.link,
-                #         'published': entry.get('published','N/A')
-                #     })
-                # elif re.search(rf'\b{ticker_lower}\b',summary):
-                #     headlines.append({
-                #         'title': entry.title,
-                #         'link': entry.link,
-                #         'published': entry.get('published','N/A')
-                #     })
-                # if re.search(rf'\b{company_name_lower}\b',summary):
-                #     headlines.append({
-                #         'title': entry.title,
-                #         'link': entry.link,
-                #         'published': entry.get('published','N/A')
-                #     })
-                # elif re.search(rf'\b{company_name_lower}\b',title):
-                #     headlines.append({
-                #         'title': entry.title,
-                #         'link': entry.link,
-                #         'published': entry.get('published','N/A')
-                #     })
-                
 
         except:
             continue
