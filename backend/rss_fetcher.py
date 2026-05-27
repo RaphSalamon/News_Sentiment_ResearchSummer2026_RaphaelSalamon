@@ -23,14 +23,41 @@ def search_ticker( ticker,company_name):
                 print("CHECKING:", title)
                 print("SUMMARY:", summary[:100])
                 print("---")
-                if re.search(r'\wo')
-                print(ticker_lower in title, company_name_lower in title, ticker_lower in summary, company_name_lower in summary)
-                if (ticker_lower in title or company_name_lower in title) or (ticker_lower in summary or company_name_lower in summary): # if we see the ticker/company name in the summary or title, we add it
+                 
+                if re.search(rf'\b{ticker_lower}\b',title) or re.search(rf'\b{ticker_lower}\b',summary) or re.search(rf'\b{company_name_lower}\b',summary) or re.search(rf'\b{company_name_lower}\b',title):
                     headlines.append({
                         'title': entry.title,
                         'link': entry.link,
                         'published': entry.get('published','N/A')
                     })
+
+
+                # if re.search(rf'\b{ticker_lower}\b',title):
+                #         headlines.append({
+                #         'title': entry.title,
+                #         'link': entry.link,
+                #         'published': entry.get('published','N/A')
+                #     })
+                # elif re.search(rf'\b{ticker_lower}\b',summary):
+                #     headlines.append({
+                #         'title': entry.title,
+                #         'link': entry.link,
+                #         'published': entry.get('published','N/A')
+                #     })
+                # if re.search(rf'\b{company_name_lower}\b',summary):
+                #     headlines.append({
+                #         'title': entry.title,
+                #         'link': entry.link,
+                #         'published': entry.get('published','N/A')
+                #     })
+                # elif re.search(rf'\b{company_name_lower}\b',title):
+                #     headlines.append({
+                #         'title': entry.title,
+                #         'link': entry.link,
+                #         'published': entry.get('published','N/A')
+                #     })
+                
+
         except:
             continue
 
