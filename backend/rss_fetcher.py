@@ -38,7 +38,15 @@ def search_ticker( ticker,company_name):
 
 
 if __name__ == '__main__':
-    results = search_ticker('NKE','Nike')
+    test_stocks = {
+    'AAPL': 'Apple',
+    'TSLA': 'Tesla',
+    'JPM': 'JPMorgan'
+}
+    results=[]
+    for ticker, company_name in test_stocks.items():
+            results.extend(search_ticker(ticker,company_name))
+    # results = search_ticker('JPM','JPMorgan')
     for headline in results:
         print(headline['title'])
         print(headline['link'])
