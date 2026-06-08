@@ -39,9 +39,8 @@ def preprocess_text(text): #function used to process the text and make it neat f
 
 
 if __name__ == '__main__':
-   test = "Apple reports no growth and profits are not looking good with declining revenue"
-print("original: " + test)
-print("cleaned:  " + preprocess_text(test))
-
+    test = "Apple reports no growth and profits are not looking good with declining revenue"
+    print("original: " + test)
+    print("cleaned:  " + preprocess_text(test))
 
         #LOOK AT HOW SENTIMENT MAY BE IMPACTED 
