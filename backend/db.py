@@ -67,3 +67,35 @@ def get_cached_top50():
     if doc is None:
         return None
     return doc.get("results", [])
+
+
+# Chat history, keyed by a client_id the frontend generates and stores in
+# localStorage (see api/client.js). This is NOT a real login system -- there's
+# no auth, so this only persists per-browser/per-device, not across devices
+# for the same person. It's the cheap version: "saved on the server" in the
+# sense that closing/reopening the browser on the SAME machine still finds
+# the history, but it won't follow you to a different computer or browser
+# without a real account system, which is a much bigger feature.
+chat_history_collection = db["chat_history"]
+
+
+def save_chat_history(client_id, messages):
+    """
+    Save (overwrite) the full message history for a given client_id.
+    Upsert keyed on client_id, same pattern as save_top50_results.
+    """
+    document = {
+        "_id": client_id,
+        "messages": messages
+    }
+    chat_history_collection.replace_one({"_id": client_id}, document, upsert=True)
+
+
+def get_chat_history(client_id):
+    """
+    Returns the saved message list for a client_id, or [] if there isn't one yet.
+    """
+    doc = chat_history_collection.find_one({"_id": client_id})
+    if doc is None:
+        return []
+    return doc.get("messages", [])

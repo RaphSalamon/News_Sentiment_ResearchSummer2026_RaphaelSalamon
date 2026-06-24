@@ -18,11 +18,13 @@ states a number, that number came from a real function call.
 
 import os
 import json
+from typing import Any, cast
 from groq import Groq
 from dotenv import load_dotenv
 
 from rss_fetcher import search_ticker
 from classifier import classify_sentiment, analyze_headlines
+from preprocessor import filter_relevant_headlines
 from fundamentals import get_fundamentals
 
 load_dotenv()
@@ -52,7 +54,7 @@ RULES:
 - If a tool returns no data for a ticker, say so plainly rather than guessing.
 """
 
-TOOLS = [
+TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
@@ -107,6 +109,8 @@ def get_sentiment_score(ticker, company_name):
     if not headlines:
         return {"error": f"No recent headlines found for {ticker}."}
 
+    headlines = filter_relevant_headlines(headlines)
+
     score = analyze_headlines(headlines)
     label = classify_sentiment(score).strip()
     return {
@@ -157,15 +161,15 @@ def chat(user_message, conversation_history=None):
     if conversation_history is None:
         conversation_history = []
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(conversation_history)
     messages.append({"role": "user", "content": user_message})
 
     # First call: let the model decide if it needs a tool
     response = client.chat.completions.create(
         model=MODEL,
-        messages=messages,
-        tools=TOOLS,
+        messages=cast(Any, messages),
+        tools=cast(Any, TOOLS),
         tool_choice="auto",
         temperature=0.3,
         max_completion_tokens=1024,
@@ -178,9 +182,28 @@ def chat(user_message, conversation_history=None):
         # No tool needed -- model answered directly
         return response_message.content
 
-    # Model wants to call one or more tools. Append its tool-call message,
-    # then run each tool and append the result.
-    messages.append(response_message)
+    # Model wants to call one or more tools. Append its tool-call message --
+    # rebuilt as a plain, fully JSON-serializable dict. response_message.tool_calls
+    # is a list of SDK objects (not plain dicts), so embedding it directly would
+    # break serialization on the SECOND API call below. This is the actual bug
+    # that was here before: it would surface as an error specifically on
+    # requests that needed a tool (sentiment/fundamentals lookups), not on
+    # simple questions the model could answer directly.
+    messages.append({
+        "role": "assistant",
+        "content": response_message.content,
+        "tool_calls": [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in tool_calls
+        ],
+    })
 
     for tool_call in tool_calls:
         function_name = tool_call.function.name
@@ -204,7 +227,7 @@ def chat(user_message, conversation_history=None):
     # Second call: model summarizes the tool result(s) into a real answer
     final_response = client.chat.completions.create(
         model=MODEL,
-        messages=messages,
+        messages=cast(Any, messages),
         temperature=0.3,
         max_completion_tokens=1024,
     )

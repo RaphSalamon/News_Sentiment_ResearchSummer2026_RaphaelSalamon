@@ -1,6 +1,6 @@
 import numpy as np
 from preprocessor import preprocess_text
-from sentiment_model import finbert_model
+from sentiment_model import finbert_batch
 
 
 
@@ -13,10 +13,14 @@ def classify_sentiment(score): # takes the sentiment score as a input
         return " HOLD" # HOLD IF ITS IN BETWEEN
     
 def analyze_headlines(headlines):
-    scores=[] # scores list
-    for headline in headlines:
-        scores.append(finbert_model(preprocess_text(headline['title'])))# loop thru each headline, preprocess the text and store it in the model
-    return np.mean(scores) # return the average of scores
+    # Same return value as before (mean sentiment score across all headlines),
+    # but now runs every headline through FinBERT in ONE batched call instead
+    # of looping and calling the model once per headline. Big speed win,
+    # especially noticeable in top50.py where this used to mean hundreds of
+    # separate model calls per refresh.
+    cleaned_texts = [preprocess_text(headline['title']) for headline in headlines]
+    scores = finbert_batch(cleaned_texts)
+    return np.mean(scores)
 
 
 
