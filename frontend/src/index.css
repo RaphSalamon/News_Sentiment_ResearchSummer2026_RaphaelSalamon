@@ -339,3 +339,268 @@ input:focus-visible {
     font-size: 24px;
   }
 }
+
+/* Nav tabs */
+.app-nav {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  justify-content: center;
+}
+
+.app-nav__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink-soft);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.app-nav__tab:hover {
+  background: var(--color-bg);
+}
+
+.app-nav__tab--active {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: white;
+}
+
+.app-main--wide {
+  max-width: 760px;
+}
+
+/* Chat */
+.chat {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  height: 520px;
+}
+
+.chat__window {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 4px 12px;
+}
+
+.chat__bubble {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.chat__bubble--assistant {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+}
+
+.chat__bubble--user {
+  background: var(--color-brand);
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+
+.chat__bubble--loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-ink-soft);
+}
+
+.chat__error {
+  color: var(--color-avoid);
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+
+.chat__form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chat__input {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  font-size: 14px;
+}
+
+.chat__send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  border-radius: 12px;
+  border: none;
+  background: var(--color-ink);
+  color: white;
+  cursor: pointer;
+}
+
+.chat__send:hover:not(:disabled) {
+  background: #2c3b54;
+}
+
+.chat__send:disabled {
+  background: var(--color-border);
+  color: var(--color-ink-soft);
+  cursor: not-allowed;
+}
+
+.chat__disclaimer-note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--color-ink-soft);
+  text-align: center;
+}
+
+/* Market overview */
+.market {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: 24px;
+}
+
+.market__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.market__title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 20px;
+  margin: 0;
+}
+
+.market__sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.market__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.market__refresh:hover:not(:disabled) {
+  background: var(--color-border);
+}
+
+.market__refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.market__loading-note {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+  margin-bottom: 12px;
+}
+
+.market__error {
+  color: var(--color-avoid);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.market__empty {
+  color: var(--color-ink-soft);
+  font-size: 14px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.market__table-wrap {
+  overflow-x: auto;
+}
+
+.market__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.market__table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+  border-bottom: 2px solid var(--color-border);
+}
+
+.market__table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.market__table tr:last-child td {
+  border-bottom: none;
+}
+
+.market__table tr:hover td {
+  background: var(--color-bg);
+}
+
+.market__rank {
+  color: var(--color-ink-soft);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.market__ticker {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+
+.market__company {
+  color: var(--color-ink-soft);
+}
+
+.market__change-up {
+  color: var(--color-buy);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.market__change-down {
+  color: var(--color-avoid);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
