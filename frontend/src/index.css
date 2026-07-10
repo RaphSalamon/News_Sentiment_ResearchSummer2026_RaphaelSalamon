@@ -593,6 +593,11 @@ input:focus-visible {
   color: var(--color-ink-soft);
 }
 
+.market__price {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+
 .market__change-up {
   color: var(--color-buy);
   font-family: 'JetBrains Mono', monospace;

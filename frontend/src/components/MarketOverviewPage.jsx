@@ -4,6 +4,8 @@ import StockBadge from './StockBadge'
 import { fetchTop50 } from '../api/client'
 
 export default function MarketOverviewPage() {
+  // null = never fetched yet. [] = fetched, but nothing qualified today.
+  // (these need to read differently to the user, so we don't collapse them)
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -25,6 +27,9 @@ export default function MarketOverviewPage() {
     }
   }
 
+  const hasResults = results !== null && results.length > 0
+  const hasZeroResults = results !== null && results.length === 0
+
   return (
     <section className="market">
       <div className="market__header">
@@ -33,7 +38,7 @@ export default function MarketOverviewPage() {
           <p className="market__sub">
             {lastRefreshed
               ? `Last refreshed: ${lastRefreshed.toLocaleString()}`
-              : 'Top stocks ranked by recent news sentiment'}
+              : 'Stocks up 3%+ over 7 days with strong (BUY) news sentiment'}
           </p>
         </div>
         <button
@@ -53,13 +58,14 @@ export default function MarketOverviewPage() {
 
       {loading && (
         <p className="market__loading-note">
-          Running sentiment analysis across the market — this can take a few minutes.
+          Checking price moves first, then running sentiment analysis on
+          what qualifies — this can take a few minutes.
         </p>
       )}
 
       {error && <p className="market__error">{error}</p>}
 
-      {results && (
+      {hasResults && (
         <div className="market__table-wrap">
           <table className="market__table">
             <thead>
@@ -67,6 +73,7 @@ export default function MarketOverviewPage() {
                 <th>#</th>
                 <th>Ticker</th>
                 <th>Company</th>
+                <th>Price</th>
                 <th>7-Day Change</th>
                 <th>Signal</th>
               </tr>
@@ -77,6 +84,9 @@ export default function MarketOverviewPage() {
                   <td className="market__rank">{i + 1}</td>
                   <td className="market__ticker">{r.ticker}</td>
                   <td className="market__company">{r.company_name}</td>
+                  <td className="market__price">
+                    {r.current_price == null ? '—' : `$${r.current_price.toFixed(2)}`}
+                  </td>
                   <td>
                     {r.price_change_7d == null ? (
                       '—'
@@ -103,16 +113,24 @@ export default function MarketOverviewPage() {
         </div>
       )}
 
-      {!results && !loading && !error && (
-        <p className="market__empty">Click "Refresh data" to load the latest rankings.</p>
+      {hasZeroResults && (
+        <p className="market__empty">
+          No stocks cleared both filters today (7-day gain of 3%+ AND a full
+          BUY sentiment rating). That's a real reflection of current market
+          conditions, not an error — try refreshing again later.
+        </p>
+      )}
+
+      {results === null && !loading && !error && (
+        <p className="market__empty">Click "Refresh data" to load the latest shortlist.</p>
       )}
 
       <div className="disclaimer">
         <TriangleAlert size={16} aria-hidden="true" />
         <p>
-          Rankings are based on news sentiment only and do not constitute
-          financial advice. Always do your own research before making
-          investment decisions.
+          This shortlist reflects recent price momentum and news sentiment
+          only and does not constitute financial advice. Always do your own
+          research before making investment decisions.
         </p>
       </div>
     </section>
