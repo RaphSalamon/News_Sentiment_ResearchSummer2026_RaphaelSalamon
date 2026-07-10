@@ -35,3 +35,12 @@ export async function fetchTop50() {
   const response = await client.get('/api/top50', { timeout: 360000 })
   return response.data
 }
+
+/**
+ * stocks: [{ ticker: 'AAPL', company_name: 'Apple' }, ...]
+ * Returns enriched watchlist data with quadrant + signal score per ticker.
+ */
+export async function fetchWatchlistData(stocks) {
+  const response = await client.post('/api/watchlist', { stocks }, { timeout: 120000 })
+  return response.data
+}

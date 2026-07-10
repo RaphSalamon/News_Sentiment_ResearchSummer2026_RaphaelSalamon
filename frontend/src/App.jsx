@@ -13,6 +13,11 @@ const TABS = [
 export default function App() {
   const [activeTab, setActiveTab] = useState('screener')
 
+  // Lifted up so screener results auto-populate the watchlist in Market Overview.
+  // ScreenerPage calls onResults(results) when it gets data back.
+  // MarketOverviewPage receives screenerResults as a prop.
+  const [screenerResults, setScreenerResults] = useState([])
+
   return (
     <div className="app-shell">
       <nav className="app-nav">
@@ -39,9 +44,13 @@ export default function App() {
       </nav>
 
       <main className={`app-main${activeTab === 'market' ? ' app-main--wide' : ''}`}>
-        {activeTab === 'screener' && <ScreenerPage />}
-        {activeTab === 'chat'     && <ChatPage />}
-        {activeTab === 'market'   && <MarketOverviewPage />}
+        {activeTab === 'screener' && (
+          <ScreenerPage onResults={setScreenerResults} />
+        )}
+        {activeTab === 'chat' && <ChatPage />}
+        {activeTab === 'market' && (
+          <MarketOverviewPage screenerResults={screenerResults} />
+        )}
       </main>
     </div>
   )

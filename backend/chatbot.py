@@ -1,19 +1,17 @@
 """
 chatbot.py
 
-A Groq (Llama 3.3) -backed chatbot that can answer questions about stocks
-using REAL data instead of hallucinating numbers. It does this through
-tool calling: the LLM decides when it needs live data, calls one of the
-Python functions below, and uses the actual result in its answer.
+A Groq (Llama 3.3) -backed chatbot with tool-calling into your real data
+pipeline. The model is equipped to give genuine financial insights by
+synthesizing sentiment scores, P/E ratios, dividends, analyst ratings,
+price trends, and growth metrics -- always with a clear disclaimer.
 
-Tools available to the model:
-  - get_sentiment_score(ticker, company_name): runs YOUR existing pipeline
-    (rss_fetcher.search_ticker -> classifier.analyze_headlines/classify_sentiment)
-  - get_fundamentals_data(ticker): P/E ratio, market cap, sector, etc. via fundamentals.py
-  - explain_finbert(): static explainer text about what FinBERT/sentiment scoring means
-
-This keeps the chatbot from making up P/E ratios or sentiment scores -- if it
-states a number, that number came from a real function call.
+Tools:
+  - get_sentiment_score(ticker, company_name): FinBERT pipeline
+  - get_fundamentals_data(ticker): full fundamentals from yfinance
+  - get_comprehensive_analysis(ticker, company_name): both combined,
+    for when the user wants a real synthesized take on a stock
+  - explain_finbert(): static explainer about the scoring model
 """
 
 import os
@@ -36,22 +34,35 @@ if GROQ_API_KEY is None:
 client = Groq(api_key=GROQ_API_KEY)
 MODEL = "llama-3.3-70b-versatile"
 
-SYSTEM_PROMPT = """You are a financial sentiment analysis assistant for a stock research tool.
+SYSTEM_PROMPT = """You are a financial analyst assistant for a stock sentiment research tool.
+You have access to real, live data including news sentiment scores, P/E ratios, dividends,
+analyst ratings, price trends, EPS, beta, 52-week ranges, and growth metrics.
 
-You help users understand:
-- News sentiment for specific stocks (BUY/HOLD/AVOID verdicts from FinBERT analysis of recent headlines)
-- Fundamentals like P/E ratio, market cap, and sector
-- General concepts like what a P/E ratio means, how FinBERT sentiment scoring works,
-  and what BUY/HOLD/AVOID labels mean in this app
+Your role is to give users genuine, data-driven financial insights -- not just explain
+what terms mean, but actually synthesize the data into a real opinion. When you have
+enough data, tell users what the numbers suggest, what the risks look like, and what
+the overall picture is.
 
 RULES:
-- NEVER make up a sentiment score, P/E ratio, or any other number. If you need
-  real data, call the appropriate tool.
-- This app's verdicts (BUY/HOLD/AVOID) are based on news sentiment over a short
-  window, not deep fundamental analysis. Be clear about that limitation if asked.
-- You are not a licensed financial advisor. Don't tell users what to do with
-  their money -- explain the data and let them decide.
-- If a tool returns no data for a ticker, say so plainly rather than guessing.
+- NEVER make up numbers. Always call the appropriate tool to get real data.
+- Give a genuine opinion based on what the data shows. Don't just repeat the numbers
+  back -- interpret them. If a P/E is high relative to growth, say so. If sentiment
+  is negative but analyst ratings are strong, flag that divergence.
+- Always end any analysis or recommendation with this exact disclaimer:
+  "⚠️ Disclaimer: This is not financial advice. Always do your own research and
+  consult a licensed financial advisor before making investment decisions."
+- Be specific. "The P/E of 28 is reasonable for a tech company growing revenue at 15%"
+  is more useful than "the P/E ratio is 28."
+- If data for a field is missing (returns None), skip that field rather than
+  guessing or saying "N/A" repeatedly.
+- For the 30-day price trend, interpret 'uptrend', 'downtrend', or 'flat' in
+  plain English.
+- For analyst recommendations, note the score context:
+  1.0-1.5 = Strong Buy, 1.5-2.5 = Buy, 2.5-3.5 = Hold, 3.5-4.5 = Underperform, 4.5-5.0 = Sell
+- Dividend yield: anything above 3% is generally considered income-friendly.
+  Anything above 6% warrants a question about sustainability.
+- Beta interpretation: below 1 = less volatile than the market,
+  above 1 = more volatile, above 1.5 = significantly more volatile.
 """
 
 TOOLS: list[dict[str, Any]] = [
@@ -60,8 +71,8 @@ TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "get_sentiment_score",
             "description": (
-                "Get the current news sentiment score and BUY/HOLD/AVOID verdict "
-                "for a stock ticker, based on recent headlines run through FinBERT."
+                "Get the current FinBERT news sentiment score and BUY/HOLD/AVOID "
+                "verdict for a stock ticker based on recent headlines."
             ),
             "parameters": {
                 "type": "object",
@@ -78,8 +89,10 @@ TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "get_fundamentals_data",
             "description": (
-                "Get fundamental data for a stock ticker: P/E ratio, forward P/E, "
-                "market cap, sector, industry, and current price."
+                "Get comprehensive fundamental data for a stock: P/E ratio, forward P/E, "
+                "PEG ratio, EPS, dividends, beta, 52-week range, analyst ratings and price "
+                "targets, revenue/earnings growth, profit margins, debt-to-equity, free "
+                "cashflow, and 30-day price trend."
             ),
             "parameters": {
                 "type": "object",
@@ -87,6 +100,25 @@ TOOLS: list[dict[str, Any]] = [
                     "ticker": {"type": "string", "description": "Stock ticker symbol, e.g. AAPL"}
                 },
                 "required": ["ticker"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_comprehensive_analysis",
+            "description": (
+                "Get BOTH sentiment AND full fundamentals for a stock in one call, "
+                "for a complete synthesized analysis. Use this when the user wants "
+                "a full picture or asks whether a stock is worth investing in."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {"type": "string", "description": "Stock ticker symbol, e.g. AAPL"},
+                    "company_name": {"type": "string", "description": "Company name, e.g. Apple"}
+                },
+                "required": ["ticker", "company_name"]
             }
         }
     },
@@ -108,16 +140,18 @@ def get_sentiment_score(ticker, company_name):
     headlines = search_ticker(ticker, company_name)
     if not headlines:
         return {"error": f"No recent headlines found for {ticker}."}
-
     headlines = filter_relevant_headlines(headlines)
-
     score = analyze_headlines(headlines)
     label = classify_sentiment(score).strip()
     return {
         "ticker": ticker,
-        "score": round(score, 4),
-        "label": label,
-        "headline_count": len(headlines)
+        "sentiment_score": round(float(score), 4),
+        "verdict": label,
+        "headline_count": len(headlines),
+        "note": (
+            "Score > +0.15 = BUY, < -0.15 = AVOID, in between = HOLD. "
+            "Based on recent news headlines only."
+        )
     }
 
 
@@ -128,35 +162,50 @@ def get_fundamentals_data(ticker):
     return data
 
 
-def explain_finbert():
+def get_comprehensive_analysis(ticker, company_name):
+    """Runs both tools and returns a combined dict the model can synthesize."""
+    sentiment = get_sentiment_score(ticker, company_name)
+    fundamentals = get_fundamentals_data(ticker)
+
     return {
-        "explanation": (
-            "This app uses FinBERT (ProsusAI/finbert), a version of BERT fine-tuned "
-            "specifically on financial text. For each headline, FinBERT outputs three "
-            "probabilities: positive, negative, and neutral. The compound score is "
-            "calculated as positive minus negative. Scores across all headlines for a "
-            "ticker are averaged. A score above +0.15 is classified BUY, below -0.15 "
-            "is classified AVOID, and anything in between is HOLD. This reflects "
-            "recent news tone, not a full fundamental or technical analysis."
+        "ticker": ticker,
+        "company_name": company_name,
+        "sentiment": sentiment,
+        "fundamentals": fundamentals,
+        "analysis_note": (
+            "Synthesize both the sentiment score and the fundamental data into "
+            "a clear, honest assessment. Note any divergences (e.g. positive "
+            "fundamentals but negative sentiment, or strong growth but high P/E). "
+            "End with the disclaimer."
         )
     }
 
 
-# Maps tool names the model can call to the actual Python functions above
+def explain_finbert():
+    return {
+        "explanation": (
+            "This app uses FinBERT (ProsusAI/finbert), a BERT model fine-tuned on "
+            "financial text. For each headline, it outputs positive, negative, and "
+            "neutral probabilities. The compound score is positive minus negative, "
+            "averaged across all relevant, de-duplicated headlines for the ticker. "
+            "Score above +0.15 = BUY, below -0.15 = AVOID, in between = HOLD. "
+            "This reflects short-term news tone, not deep fundamental analysis."
+        )
+    }
+
+
 AVAILABLE_FUNCTIONS = {
     "get_sentiment_score": get_sentiment_score,
     "get_fundamentals_data": get_fundamentals_data,
+    "get_comprehensive_analysis": get_comprehensive_analysis,
     "explain_finbert": explain_finbert,
 }
 
 
 def chat(user_message, conversation_history=None):
     """
-    Main entry point. Send a user message (plus optional prior history),
-    get back the assistant's reply as a string.
-
-    conversation_history: list of {"role": ..., "content": ...} dicts from
-    previous turns, NOT including the system prompt or this new user_message.
+    Main entry point. Sends a user message plus prior history,
+    returns the assistant's reply as a string.
     """
     if conversation_history is None:
         conversation_history = []
@@ -165,30 +214,23 @@ def chat(user_message, conversation_history=None):
     messages.extend(conversation_history)
     messages.append({"role": "user", "content": user_message})
 
-    # First call: let the model decide if it needs a tool
     response = client.chat.completions.create(
         model=MODEL,
         messages=cast(Any, messages),
         tools=cast(Any, TOOLS),
         tool_choice="auto",
         temperature=0.3,
-        max_completion_tokens=1024,
+        max_completion_tokens=1500,
     )
 
     response_message = response.choices[0].message
     tool_calls = response_message.tool_calls
 
     if not tool_calls:
-        # No tool needed -- model answered directly
         return response_message.content
 
-    # Model wants to call one or more tools. Append its tool-call message --
-    # rebuilt as a plain, fully JSON-serializable dict. response_message.tool_calls
-    # is a list of SDK objects (not plain dicts), so embedding it directly would
-    # break serialization on the SECOND API call below. This is the actual bug
-    # that was here before: it would surface as an error specifically on
-    # requests that needed a tool (sentiment/fundamentals lookups), not on
-    # simple questions the model could answer directly.
+    # Rebuild as plain dicts -- SDK objects aren't JSON-serializable, which
+    # breaks the second API call. This was a real bug, now fixed.
     messages.append({
         "role": "assistant",
         "content": response_message.content,
@@ -224,18 +266,19 @@ def chat(user_message, conversation_history=None):
             "content": json.dumps(function_response)
         })
 
-    # Second call: model summarizes the tool result(s) into a real answer
     final_response = client.chat.completions.create(
         model=MODEL,
         messages=cast(Any, messages),
         temperature=0.3,
-        max_completion_tokens=1024,
+        max_completion_tokens=1500,
     )
 
     return final_response.choices[0].message.content
 
 
-if __name__ == '__main__':
-    print(chat("What's the sentiment on Tesla right now?"))
+if __name__ == "__main__":
+    print(chat("Give me a full analysis on Tesla -- sentiment, fundamentals, the works."))
     print("---")
-    print(chat("What's a P/E ratio and what's Apple's right now?"))
+    print(chat("Is Apple's dividend worth caring about?"))
+    print("---")
+    print(chat("How risky is NVDA compared to the broader market?"))
