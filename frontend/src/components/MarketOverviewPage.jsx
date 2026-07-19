@@ -1,7 +1,18 @@
 import { useState, useEffect } from 'react'
 import { RefreshCw, Loader2, TriangleAlert, Plus, X } from 'lucide-react'
 import { fetchTop50, fetchWatchlistData } from '../api/client'
-import WatchlistChart from './WatchlistChart'
+import WatchlistChart3D from './WatchlistChart3D'
+
+// Market cap tiers the user can choose from
+const CAP_TIERS = [
+  { id: 'All',   label: 'All',   desc: null },
+  { id: 'Mega',  label: 'Mega',  desc: '$200B+' },
+  { id: 'Large', label: 'Large', desc: '$10B–$200B' },
+  { id: 'Mid',   label: 'Mid',   desc: '$2B–$10B' },
+  { id: 'Small', label: 'Small', desc: '$300M–$2B' },
+  { id: 'Micro', label: 'Micro', desc: '$50M–$300M' },
+  { id: 'Nano',  label: 'Nano',  desc: '<$50M' },
+]
 
 function SignalBadge({ label }) {
   const l = label?.toUpperCase()
@@ -14,13 +25,14 @@ function SignalBadge({ label }) {
 
 function ScoreMeter({ score }) {
   const color =
-    score >= 65 ? 'var(--color-buy)'  :
+    score >= 65 ? 'var(--color-buy)'   :
     score <= 35 ? 'var(--color-avoid)' :
                   'var(--color-hold)'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <div style={{
-        width: 80, height: 7, background: 'var(--color-border)', borderRadius: 999, overflow: 'hidden'
+        width: 80, height: 7, background: 'var(--color-border)',
+        borderRadius: 999, overflow: 'hidden'
       }}>
         <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: 999 }} />
       </div>
@@ -30,26 +42,26 @@ function ScoreMeter({ score }) {
 }
 
 export default function MarketOverviewPage({ screenerResults = [] }) {
-  const [mode, setMode] = useState('simple') // 'simple' | 'advanced'
+  const [mode, setMode] = useState('simple')
 
-  // — Simple mode state —
-  const [marketResults, setMarketResults] = useState(null)
-  const [marketLoading, setMarketLoading] = useState(false)
-  const [marketError, setMarketError]     = useState(null)
-  const [lastRefreshed, setLastRefreshed] = useState(null)
+  // — Simple mode —
+  const [marketResults, setMarketResults]   = useState(null)
+  const [marketLoading, setMarketLoading]   = useState(false)
+  const [marketError, setMarketError]       = useState(null)
+  const [lastRefreshed, setLastRefreshed]   = useState(null)
 
-  // — Advanced (watchlist) mode state —
-  const [watchlistStocks, setWatchlistStocks] = useState([])
-  const [watchlistData, setWatchlistData]     = useState(null)
+  // — Advanced (watchlist + 3D chart) mode —
+  const [watchlistStocks, setWatchlistStocks]   = useState([])
+  const [watchlistData, setWatchlistData]       = useState(null)
   const [watchlistLoading, setWatchlistLoading] = useState(false)
-  const [watchlistError, setWatchlistError]   = useState(null)
-  const [chart3D, setChart3D] = useState(false)
+  const [watchlistError, setWatchlistError]     = useState(null)
+  const [selectedCapTier, setSelectedCapTier]   = useState('All')
 
-  // Ticker input for manually adding to watchlist
+  // Manual add inputs
   const [addTicker, setAddTicker]   = useState('')
   const [addCompany, setAddCompany] = useState('')
 
-  // Auto-populate watchlist from screener results when they arrive
+  // Auto-populate watchlist from screener results
   useEffect(() => {
     if (!screenerResults.length) return
     setWatchlistStocks((prev) => {
@@ -59,7 +71,7 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
     })
   }, [screenerResults])
 
-  // — Simple mode handlers —
+  // — Simple mode —
   async function handleMarketRefresh() {
     setMarketLoading(true); setMarketError(null)
     try {
@@ -73,7 +85,7 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
     }
   }
 
-  // — Advanced (watchlist) mode handlers —
+  // — Advanced mode —
   function handleAddToWatchlist() {
     const ticker  = addTicker.trim().toUpperCase()
     const company = addCompany.trim()
@@ -103,13 +115,13 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
     }
   }
 
-  const hasMarket = marketResults !== null && marketResults.length > 0
-  const noMarket  = marketResults !== null && marketResults.length === 0
+  const hasMarket  = marketResults !== null && marketResults.length > 0
+  const noMarket   = marketResults !== null && marketResults.length === 0
 
   return (
     <section className="market">
 
-      {/* Header with Simple/Advanced toggle */}
+      {/* ── Header + Simple/Advanced toggle ── */}
       <div className="market__controls">
         <div>
           <h2 className="market__title">Market Overview</h2>
@@ -118,7 +130,7 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
               ? lastRefreshed
                 ? `Shortlist · 3%+ 7-day gain + BUY sentiment · ${lastRefreshed.toLocaleString()}`
                 : 'Stocks with 3%+ 7-day gain and BUY sentiment score'
-              : 'Watchlist — sentiment vs price quadrant analysis'}
+              : 'Watchlist — 3D Sentiment × Price × Volume analysis'}
           </p>
         </div>
         <div className="market__right">
@@ -152,7 +164,7 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
         </div>
       </div>
 
-      {/* ─── SIMPLE MODE ─────────────────────── */}
+      {/* ── SIMPLE MODE ── */}
       {mode === 'simple' && (
         <>
           {marketLoading && (
@@ -221,22 +233,29 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
         </>
       )}
 
-      {/* ─── ADVANCED MODE (WATCHLIST + CHART) ── */}
+      {/* ── ADVANCED MODE (WATCHLIST + 3D CHART) ── */}
       {mode === 'advanced' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* Watchlist builder */}
-          <div style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: 16 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', marginBottom: 10 }}>
+          <div style={{
+            background: 'var(--color-surface-2)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)',
+            padding: 16
+          }}>
+            <p style={{
+              fontSize: 12, fontWeight: 700, letterSpacing: '.06em',
+              textTransform: 'uppercase', color: 'var(--color-ink-muted)', marginBottom: 10
+            }}>
               Watchlist
               {screenerResults.length > 0 && (
-                <span style={{ color: 'var(--color-blue)', marginLeft: 8, fontWeight: 500, textTransform: 'none' }}>
+                <span style={{ color: 'var(--color-blue)', fontWeight: 500, textTransform: 'none', marginLeft: 8 }}>
                   · {screenerResults.length} stock{screenerResults.length !== 1 ? 's' : ''} auto-added from Search
                 </span>
               )}
             </p>
 
-            {/* Current watchlist chips */}
             {watchlistStocks.length > 0 && (
               <div className="screener__chips" style={{ marginBottom: 12 }}>
                 {watchlistStocks.map((s) => (
@@ -256,7 +275,6 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
               </div>
             )}
 
-            {/* Manual add input */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <input
                 className="screener__input"
@@ -293,35 +311,80 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
 
           {watchlistError && <p className="market__error">{watchlistError}</p>}
 
-          {/* Chart + 2D/3D toggle */}
           {watchlistData && (
             <>
+              {/* ── Market Cap Filter ── */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink-mid)', margin: 0 }}>
-                    Sentiment vs Price Change — Quadrant Analysis
-                  </p>
-                  <div className="toggle-advanced">
-                    <button
-                      type="button"
-                      className={`toggle-advanced__opt${!chart3D ? ' toggle-advanced__opt--on' : ''}`}
-                      onClick={() => setChart3D(false)}
-                    >
-                      2D
-                    </button>
-                    <button
-                      type="button"
-                      className={`toggle-advanced__opt${chart3D ? ' toggle-advanced__opt--on' : ''}`}
-                      onClick={() => setChart3D(true)}
-                    >
-                      3D (Volume)
-                    </button>
-                  </div>
+                <p style={{
+                  fontSize: 12, fontWeight: 700, letterSpacing: '.06em',
+                  textTransform: 'uppercase', color: 'var(--color-ink-muted)', marginBottom: 10
+                }}>
+                  Filter by Market Cap
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {CAP_TIERS.map((tier) => {
+                    const isActive = selectedCapTier === tier.id
+                    // Count how many stocks match this tier
+                    const count = tier.id === 'All'
+                      ? watchlistData.filter((r) => !r.error).length
+                      : watchlistData.filter((r) => !r.error && r.market_cap_tier === tier.id).length
+                    return (
+                      <button
+                        key={tier.id}
+                        type="button"
+                        onClick={() => setSelectedCapTier(tier.id)}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: 999,
+                          border: isActive ? '2px solid var(--color-blue)' : '1px solid var(--color-border-mid)',
+                          background: isActive ? 'var(--color-blue)' : 'var(--color-surface-2)',
+                          color: isActive ? '#fff' : 'var(--color-ink-mid)',
+                          fontWeight: 600,
+                          fontSize: 13,
+                          cursor: count === 0 && !isActive ? 'default' : 'pointer',
+                          opacity: count === 0 && !isActive ? 0.4 : 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                        disabled={count === 0 && !isActive}
+                        title={tier.desc ?? 'All market caps'}
+                      >
+                        {tier.label}
+                        {tier.desc && (
+                          <span style={{ fontSize: 10, opacity: 0.75 }}>{tier.desc}</span>
+                        )}
+                        <span style={{
+                          background: isActive ? 'rgba(255,255,255,0.25)' : 'var(--color-border)',
+                          borderRadius: 999,
+                          padding: '1px 6px',
+                          fontSize: 11,
+                        }}>
+                          {count}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
-                <WatchlistChart data={watchlistData} mode3D={chart3D} />
               </div>
 
-              {/* Quadrant legend */}
+              {/* ── 3D Chart ── */}
+              <div>
+                <p style={{
+                  fontSize: 13, fontWeight: 600, color: 'var(--color-ink-mid)',
+                  marginBottom: 12
+                }}>
+                  3D Quadrant Analysis — Sentiment × Price Change × Relative Volume
+                  {selectedCapTier !== 'All' && (
+                    <span style={{ color: 'var(--color-blue)', marginLeft: 8 }}>
+                      · {selectedCapTier} Cap
+                    </span>
+                  )}
+                </p>
+                <WatchlistChart3D data={watchlistData} selectedCapTier={selectedCapTier} />
+              </div>
+
+              {/* ── Quadrant legend ── */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {[
                   { key: 'Q1', color: '#16A34A', name: 'Confirmed Momentum', desc: 'Both positive — strongest signal' },
@@ -339,54 +402,70 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
                 ))}
               </div>
 
-              {/* Signal score table */}
+              {/* ── Signal Rankings Table ── */}
               <div>
-                <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', marginBottom: 10 }}>
+                <p style={{
+                  fontSize: 12, fontWeight: 700, letterSpacing: '.06em',
+                  textTransform: 'uppercase', color: 'var(--color-ink-muted)', marginBottom: 10
+                }}>
                   Signal Rankings
                 </p>
                 <div className="market__table-wrap">
                   <table className="market__table">
                     <thead>
                       <tr>
-                        <th>#</th><th>Ticker</th><th>Quadrant</th>
-                        <th>Sentiment</th><th>7d Price</th>
+                        <th>#</th><th>Ticker</th><th>Cap Tier</th><th>Quadrant</th>
+                        <th>Sentiment</th><th>10d Price</th>
                         <th>Rel. Volume</th><th>Signal Score</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {watchlistData.filter((r) => !r.error).map((r, i) => (
-                        <tr key={r.ticker}>
-                          <td className="market__rank">{i + 1}</td>
-                          <td>
-                            <div className="market__ticker">{r.ticker}</div>
-                            <div className="market__company">{r.company_name}</div>
-                          </td>
-                          <td>
-                            <span style={{ fontWeight: 600, color: r.quadrant_color, fontSize: 12 }}>
-                              {r.quadrant_name}
-                            </span>
-                          </td>
-                          <td>
-                            <span style={{
-                              fontFamily: 'monospace', fontWeight: 700,
-                              color: r.sentiment_score >= 0.15 ? 'var(--color-buy)' : r.sentiment_score <= -0.15 ? 'var(--color-avoid)' : 'var(--color-hold)'
-                            }}>
-                              {r.sentiment_score >= 0 ? '+' : ''}{r.sentiment_score.toFixed(4)}
-                            </span>
-                          </td>
-                          <td>
-                            {r.price_change_7d == null ? '—' : (
-                              <span className={r.price_change_7d >= 0 ? 'market__change-up' : 'market__change-down'}>
-                                {r.price_change_7d >= 0 ? '▲' : '▼'} {Math.abs(r.price_change_7d)}%
+                      {watchlistData
+                        .filter((r) => !r.error && (selectedCapTier === 'All' || r.market_cap_tier === selectedCapTier))
+                        .map((r, i) => (
+                          <tr key={r.ticker}>
+                            <td className="market__rank">{i + 1}</td>
+                            <td>
+                              <div className="market__ticker">{r.ticker}</div>
+                              <div className="market__company">{r.company_name}</div>
+                            </td>
+                            <td>
+                              <span style={{
+                                fontSize: 11, fontWeight: 700, padding: '2px 8px',
+                                borderRadius: 999, background: 'var(--color-border)',
+                                color: 'var(--color-ink-mid)'
+                              }}>
+                                {r.market_cap_tier}
                               </span>
-                            )}
-                          </td>
-                          <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
-                            {r.relative_volume != null ? `${r.relative_volume}x` : '—'}
-                          </td>
-                          <td><ScoreMeter score={r.signal_score} /></td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td>
+                              <span style={{ fontWeight: 600, color: r.quadrant_color, fontSize: 12 }}>
+                                {r.quadrant_name}
+                              </span>
+                            </td>
+                            <td>
+                              <span style={{
+                                fontFamily: 'monospace', fontWeight: 700,
+                                color: r.sentiment_score >= 0.15 ? 'var(--color-buy)' :
+                                       r.sentiment_score <= -0.15 ? 'var(--color-avoid)' :
+                                       'var(--color-hold)'
+                              }}>
+                                {r.sentiment_score >= 0 ? '+' : ''}{r.sentiment_score.toFixed(4)}
+                              </span>
+                            </td>
+                            <td>
+                              {r.price_change_7d == null ? '—' : (
+                                <span className={r.price_change_7d >= 0 ? 'market__change-up' : 'market__change-down'}>
+                                  {r.price_change_7d >= 0 ? '▲' : '▼'} {Math.abs(r.price_change_7d)}%
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                              {r.relative_volume != null ? `${r.relative_volume}x` : '—'}
+                            </td>
+                            <td><ScoreMeter score={r.signal_score} /></td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -397,8 +476,8 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
           {!watchlistData && !watchlistLoading && !watchlistError && (
             <p className="market__empty">
               {watchlistStocks.length
-                ? 'Click "Analyze →" to run quadrant analysis on your watchlist.'
-                : 'Add stocks to your watchlist above, or run a Search first to auto-populate.'}
+                ? 'Click "Analyze →" to run 3D quadrant analysis on your watchlist.'
+                : 'Add stocks above, or search stocks first to auto-populate.'}
             </p>
           )}
         </div>
@@ -407,8 +486,8 @@ export default function MarketOverviewPage({ screenerResults = [] }) {
       <div className="disclaimer" style={{ marginTop: 20 }}>
         <TriangleAlert size={16} />
         <p>
-          Quadrant analysis and signal scores are experimental tools based on news
-          sentiment and price data only. They do not constitute financial advice.
+          Quadrant analysis and signal scores are experimental research tools based on
+          news sentiment and price data only. They do not constitute financial advice.
           Always do your own research before making investment decisions.
         </p>
       </div>
