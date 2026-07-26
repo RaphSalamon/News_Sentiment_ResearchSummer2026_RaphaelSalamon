@@ -36,11 +36,29 @@ export async function fetchTop50() {
   return response.data
 }
 
-/**
- * stocks: [{ ticker: 'AAPL', company_name: 'Apple' }, ...]
- * Returns enriched watchlist data with quadrant + signal score per ticker.
- */
 export async function fetchWatchlistData(stocks) {
   const response = await client.post('/api/watchlist', { stocks }, { timeout: 120000 })
+  return response.data
+}
+
+/**
+ * Machine-based automated scanner.
+ * Tells the backend to:
+ *   1. Login to Finviz Elite
+ *   2. Pull a live ticker list based on the given filters
+ *   3. Run full sentiment + price + volume analysis on all of them
+ *   4. Return results ready for the 3D chart
+ *
+ * params: {
+ *   cap_tier:       'Large' | 'Mega' | 'Mid' | 'Small' | 'Micro' | 'Nano' | 'All'
+ *   sector:         'Technology' | 'Healthcare' | ... | 'All'
+ *   limit:          number (10-100)
+ *   min_avg_volume: number (e.g. 500000)
+ * }
+ */
+export async function autoAnalyze(params) {
+  const response = await client.post('/api/auto-analyze', params, {
+    timeout: 600000,  // 10 minutes -- scanning 30+ stocks takes time
+  })
   return response.data
 }
