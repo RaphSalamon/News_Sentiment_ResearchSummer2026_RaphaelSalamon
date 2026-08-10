@@ -3,23 +3,26 @@ watchlist.py
 
 Fetches and scores a user-defined watchlist of stocks.
 
-For each ticker, pulls:
-  - Sentiment score (RSS + FinBERT pipeline, same as screener)
-  - 10-day historical price trajectory + relative volume per day
-    (professor's formula: each day's volume / prior-10-day average volume)
-  - Current price, relative volume, market cap tier
+Speed/freshness fix: the pipeline now detects whether the market is currently
+open and uses the best available data source accordingly:
 
-Then assigns each stock to one of four quadrants and a 0-100 signal score.
+  DURING MARKET HOURS (9:30am-4:00pm ET, Mon-Fri):
+    - Price:        yfinance fast_info.last_price  (near-real-time)
+    - Volume:       today's intraday volume from 1-minute bars
+    - Rel. volume:  projected full-day volume / 10-day average
 
-Quadrant logic (X=sentiment, Y=price change):
-  Q1 (positive sentiment, positive price): Confirmed Momentum
-  Q2 (positive sentiment, negative price): Sentiment Leading -- potential opportunity
-  Q3 (negative sentiment, negative price): Confirmed Weakness -- avoid
-  Q4 (negative sentiment, positive price): Price Leading     -- caution
+  AFTER HOURS / WEEKENDS:
+    - Price:        most recent daily close
+    - Volume:       last completed session volume
+    - Rel. volume:  last session / 10-day average
+
+This means during market hours you get today's live data, and after hours
+you get the most recent complete session. No more stale yesterday-data.
 """
 
-import numpy as np
 import yfinance as yf
+import numpy as np
+from datetime import datetime, timezone, timedelta
 
 from rss_fetcher import search_ticker
 from classifier import classify_sentiment, analyze_headlines
@@ -50,17 +53,33 @@ QUADRANTS = {
 }
 
 MARKET_CAP_TIERS = {
-    "Mega":  (200e9,  float("inf")),   # $200B+
-    "Large": (10e9,   200e9),          # $10B-$200B
-    "Mid":   (2e9,    10e9),           # $2B-$10B
-    "Small": (300e6,  2e9),            # $300M-$2B
-    "Micro": (50e6,   300e6),          # $50M-$300M
-    "Nano":  (0,      50e6),           # <$50M
+    "Mega":  (200e9,  float("inf")),
+    "Large": (10e9,   200e9),
+    "Mid":   (2e9,    10e9),
+    "Small": (300e6,  2e9),
+    "Micro": (50e6,   300e6),
+    "Nano":  (0,      50e6),
 }
 
 
+def is_market_open():
+    """Returns True if NYSE is currently open (9:30am-4:00pm ET, Mon-Fri)."""
+    utc_now = datetime.now(timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        et_now = utc_now.astimezone(ZoneInfo("America/New_York"))
+    except ImportError:
+        et_now = utc_now + timedelta(hours=-4)
+
+    if et_now.weekday() >= 5:
+        return False
+    h, m = et_now.hour, et_now.minute
+    after_open   = (h == 9 and m >= 30) or h >= 10
+    before_close = h < 16
+    return after_open and before_close
+
+
 def classify_market_cap(market_cap_usd):
-    """Returns the tier label for a given market cap in USD."""
     if market_cap_usd is None:
         return "Unknown"
     for tier, (low, high) in MARKET_CAP_TIERS.items():
@@ -82,104 +101,129 @@ def get_quadrant_key(sentiment_score, price_change):
 
 
 def calculate_signal_score(sentiment_score, price_change, relative_volume):
-    """
-    0-100 composite signal score.
-    Sentiment+price agreement amplified by volume conviction.
-    """
     s = max(-1.0, min(1.0, float(sentiment_score or 0)))
     p = max(-1.0, min(1.0, float(price_change or 0) / 15.0))
     v = min(float(relative_volume or 1.0), 2.5) / 2.5
 
-    direction      = s * 0.5 + p * 0.5
+    direction       = s * 0.5 + p * 0.5
     agreement_bonus = s * p * 0.2
-    vol_factor     = 0.8 + v * 0.4
+    vol_factor      = 0.8 + v * 0.4
 
-    raw = (direction + agreement_bonus) * vol_factor
+    raw   = (direction + agreement_bonus) * vol_factor
     score = (raw + 1.44) / 2.88 * 100
     return round(max(0, min(100, score)))
 
 
 def get_stock_data(ticker, history_days=10):
     """
-    Single yfinance call that returns:
-      - 10-day historical trail (one point per trading day)
-        with cumulative price change vs. start of window
-        and relative volume (professor's formula: day_volume / prior_10d_avg_volume)
-      - Current price, current relative volume
-      - Market cap raw value (for tier classification)
-
-    Returns (history_list, current_price, current_rel_vol, market_cap_raw)
+    Fetches price, volume, and historical trail for a ticker.
+    Automatically uses live intraday data during market hours,
+    or the last completed daily session after hours.
     """
     try:
         stock = yf.Ticker(ticker)
+        market_open_now = is_market_open()
 
-        # Pull 30 days so we have enough history for the rolling 10-day volume average
-        hist = stock.history(period="30d")
+        # Always pull 30-day daily history for the trail and volume baseline
+        hist_daily = stock.history(period="30d")
+        if hist_daily.empty or len(hist_daily) < history_days:
+            return [], None, None, None, None
 
-        if hist.empty or len(hist) < history_days:
-            return [], None, None, None
+        avg_volume_10d = float(hist_daily["Volume"].tail(10).mean())
 
-        # Use the last `history_days` trading days as our trail window
-        recent = hist.tail(history_days).copy()
+        if market_open_now:
+            # Live price
+            try:
+                current_price = round(float(stock.fast_info.last_price), 2)
+            except Exception:
+                current_price = round(float(hist_daily["Close"].iloc[-1]), 2)
+
+            # Today's intraday volume from 1-minute bars
+            try:
+                intraday = stock.history(period="1d", interval="1m")
+                today_volume = float(intraday["Volume"].sum()) if not intraday.empty else 0.0
+            except Exception:
+                today_volume = float(hist_daily["Volume"].iloc[-1])
+
+            # Project partial-day volume to a full-day estimate
+            try:
+                from zoneinfo import ZoneInfo
+                et_now = datetime.now(timezone.utc).astimezone(ZoneInfo("America/New_York"))
+            except ImportError:
+                et_now = datetime.now(timezone.utc) + timedelta(hours=-4)
+
+            mins_elapsed  = max((et_now.hour - 9) * 60 + et_now.minute - 30, 1)
+            day_fraction  = min(mins_elapsed / 390, 1.0)
+            proj_volume   = today_volume / day_fraction
+            relative_volume = round(proj_volume / avg_volume_10d, 3) if avg_volume_10d > 0 else 1.0
+
+            # Price change vs previous close
+            prev_close      = float(hist_daily["Close"].iloc[-1])
+            price_change_pct = round(((current_price - prev_close) / prev_close) * 100, 2) if prev_close > 0 else 0.0
+
+        else:
+            # After hours: last completed session
+            current_price   = round(float(hist_daily["Close"].iloc[-1]), 2)
+            last_volume     = float(hist_daily["Volume"].iloc[-1])
+            relative_volume = round(last_volume / avg_volume_10d, 3) if avg_volume_10d > 0 else 1.0
+
+            ref_price       = float(hist_daily["Close"].iloc[-min(10, len(hist_daily))])
+            price_change_pct = round(((current_price - ref_price) / ref_price) * 100, 2) if ref_price > 0 else 0.0
+
+        # Historical trail from daily data
+        recent          = hist_daily.tail(history_days).copy()
         reference_price = float(recent["Close"].iloc[0])
+        history_points  = []
 
-        history_points = []
         for i, (date, row) in enumerate(recent.iterrows()):
-            # Rolling 10-day volume average ending the day BEFORE this row
-            # (professor's formula: current_vol / avg_vol_of_past_10_days)
-            end_idx = hist.index.get_loc(date)
+            end_idx   = hist_daily.index.get_loc(date)
             start_idx = max(0, end_idx - 10)
-            prior_10d_avg = float(hist["Volume"].iloc[start_idx:end_idx].mean()) if end_idx > 0 else float(hist["Volume"].mean())
-
-            rel_vol = round(float(row["Volume"]) / prior_10d_avg, 3) if prior_10d_avg > 0 else 1.0
+            prior_avg = float(hist_daily["Volume"].iloc[start_idx:end_idx].mean()) if end_idx > 0 else avg_volume_10d
+            rel_vol   = round(float(row["Volume"]) / prior_avg, 3) if prior_avg > 0 else 1.0
 
             cumulative_pct = round(
                 ((float(row["Close"]) - reference_price) / reference_price) * 100, 2
             ) if reference_price > 0 else 0.0
 
             history_points.append({
-                "day_index": i - (history_days - 1),   # -9 to 0 for 10 days
-                "date": str(date.date()),
-                "close_price": round(float(row["Close"]), 2),
+                "day_index":                   i - (history_days - 1),
+                "date":                        str(date.date()),
+                "close_price":                 round(float(row["Close"]), 2),
                 "cumulative_price_change_pct": cumulative_pct,
-                "relative_volume": rel_vol,
+                "relative_volume":             rel_vol,
             })
 
-        current = history_points[-1]
-        current_price    = current["close_price"]
-        current_rel_vol  = current["relative_volume"]
-
-        # Market cap via fast_info (much faster than full .info call)
+        # Market cap
         market_cap_raw = None
         try:
             market_cap_raw = stock.fast_info.market_cap
         except Exception:
             pass
 
-        return history_points, current_price, current_rel_vol, market_cap_raw
+        source = "live" if market_open_now else "daily_close"
+        print(f"{ticker}: ${current_price} | {price_change_pct:+.2f}% | {relative_volume}x vol | [{source}]")
+
+        return history_points, current_price, relative_volume, market_cap_raw, price_change_pct
 
     except Exception as e:
         print(f"Stock data fetch failed for {ticker}: {e}")
-        return [], None, None, None
+        return [], None, None, None, None
 
 
 def get_watchlist_data(stocks, history_days=10):
     """
     Main entry point. stocks: list of {"ticker": ..., "company_name": ...}
-    Returns list of enriched dicts sorted by signal_score descending.
-    Each dict includes a `history` list for the 3D trail visualization.
+    Returns enriched list sorted by signal_score descending.
     """
     results = []
 
     for stock in stocks:
         ticker       = stock.get("ticker", "").upper().strip()
         company_name = stock.get("company_name", ticker)
-
         if not ticker:
             continue
 
         try:
-            # 1. Sentiment (RSS + FinBERT)
             headlines = search_ticker(ticker, company_name)
             if headlines:
                 headlines = filter_relevant_headlines(headlines)
@@ -188,21 +232,16 @@ def get_watchlist_data(stocks, history_days=10):
                 sentiment_score = 0.0
             label = classify_sentiment(sentiment_score).strip()
 
-            # 2. Historical price + volume + market cap (single yfinance call)
-            history_points, current_price, current_rel_vol, market_cap_raw = \
+            history_points, current_price, relative_volume, market_cap_raw, price_change = \
                 get_stock_data(ticker, history_days=history_days)
 
-            # Cumulative 10-day price change = last history point's value
-            price_change = history_points[-1]["cumulative_price_change_pct"] if history_points else 0.0
-            relative_volume = current_rel_vol or 1.0
+            price_change    = price_change    or 0.0
+            relative_volume = relative_volume or 1.0
 
-            # 3. Market cap tier
             market_cap_tier = classify_market_cap(market_cap_raw)
-
-            # 4. Quadrant + signal score
-            quadrant_key  = get_quadrant_key(sentiment_score, price_change)
-            quadrant_info = QUADRANTS[quadrant_key]
-            signal_score  = calculate_signal_score(sentiment_score, price_change, relative_volume)
+            quadrant_key    = get_quadrant_key(sentiment_score, price_change)
+            quadrant_info   = QUADRANTS[quadrant_key]
+            signal_score    = calculate_signal_score(sentiment_score, price_change, relative_volume)
 
             results.append({
                 "ticker":               ticker,
@@ -210,7 +249,7 @@ def get_watchlist_data(stocks, history_days=10):
                 "sentiment_score":      round(sentiment_score, 4),
                 "label":                label,
                 "current_price":        current_price,
-                "price_change_7d":      price_change,       # cumulative 10-day change
+                "price_change_7d":      price_change,
                 "relative_volume":      relative_volume,
                 "market_cap_raw":       market_cap_raw,
                 "market_cap_tier":      market_cap_tier,
@@ -219,7 +258,8 @@ def get_watchlist_data(stocks, history_days=10):
                 "quadrant_color":       quadrant_info["color"],
                 "quadrant_description": quadrant_info["description"],
                 "signal_score":         signal_score,
-                "history":              history_points,     # 10-day trail for 3D chart
+                "history":              history_points,
+                "data_source":          "live" if is_market_open() else "daily_close",
             })
 
         except Exception as e:
@@ -235,16 +275,12 @@ def get_watchlist_data(stocks, history_days=10):
 
 
 if __name__ == "__main__":
-    test = [
-        {"ticker": "AAPL",  "company_name": "Apple"},
-        {"ticker": "TSLA",  "company_name": "Tesla"},
-        {"ticker": "GME",   "company_name": "GameStop"},
-    ]
-    for r in get_watchlist_data(test):
-        print(
-            f"{r['ticker']:6s}  "
-            f"tier={r.get('market_cap_tier','?'):6s}  "
-            f"Q={r.get('quadrant','?')}  "
-            f"score={r.get('signal_score','?')}  "
-            f"history_days={len(r.get('history', []))}"
-        )
+    print(f"Market open: {is_market_open()}")
+    for r in get_watchlist_data([
+        {"ticker": "AAPL", "company_name": "Apple"},
+        {"ticker": "TSLA", "company_name": "Tesla"},
+    ]):
+        print(f"{r['ticker']}: score={r.get('signal_score')} "
+              f"source={r.get('data_source')} "
+              f"price=${r.get('current_price')} "
+              f"change={r.get('price_change_7d', 0):+.2f}%")
