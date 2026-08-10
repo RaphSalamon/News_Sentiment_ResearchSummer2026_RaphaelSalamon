@@ -101,7 +101,6 @@ def pull_screener(
         "v":    "111",
         "f":    ",".join(filters) if filters else "",
         "o":    "-volume",
-        "p":    "i1",
         "auth": FINVIZ_API_TOKEN,
     }
 
