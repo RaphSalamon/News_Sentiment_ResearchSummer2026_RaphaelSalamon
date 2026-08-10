@@ -10,20 +10,31 @@ const TABS = [
   { id: 'market',   label: 'Market',  icon: LineChart },
 ]
 
+function MarketStatus() {
+  const now = new Date()
+  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const h = et.getHours(), m = et.getMinutes(), day = et.getDay()
+  const open = day >= 1 && day <= 5 && (h > 9 || (h === 9 && m >= 30)) && h < 16
+  return (
+    <div className="app-nav__status">
+      <span className="app-nav__status-dot" style={{ background: open ? 'var(--buy)' : 'var(--ink-muted)', boxShadow: open ? '0 0 6px var(--buy)' : 'none' }} />
+      {open ? 'Market Open' : 'Market Closed'}
+    </div>
+  )
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('screener')
-
-  // Lifted up so screener results auto-populate the watchlist in Market Overview.
-  // ScreenerPage calls onResults(results) when it gets data back.
-  // MarketOverviewPage receives screenerResults as a prop.
   const [screenerResults, setScreenerResults] = useState([])
 
   return (
     <div className="app-shell">
       <nav className="app-nav">
         <div className="app-nav__brand">
-          Stock<span>Buddy</span>
+          <span className="app-nav__dot" />
+          StockBuddy
         </div>
+
         <div className="app-nav__tabs">
           {TABS.map((tab) => {
             const Icon = tab.icon
@@ -41,16 +52,14 @@ export default function App() {
             )
           })}
         </div>
+
+        <MarketStatus />
       </nav>
 
-      <main className={`app-main${activeTab === 'market' ? ' app-main--wide' : ''}`}>
-        {activeTab === 'screener' && (
-          <ScreenerPage onResults={setScreenerResults} />
-        )}
-        {activeTab === 'chat' && <ChatPage />}
-        {activeTab === 'market' && (
-          <MarketOverviewPage screenerResults={screenerResults} />
-        )}
+      <main className="app-main">
+        {activeTab === 'screener' && <ScreenerPage onResults={setScreenerResults} />}
+        {activeTab === 'chat'     && <ChatPage />}
+        {activeTab === 'market'   && <MarketOverviewPage screenerResults={screenerResults} />}
       </main>
     </div>
   )

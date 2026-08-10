@@ -2,28 +2,24 @@ import { useState, useRef, useEffect } from 'react'
 import { Loader2, TriangleAlert } from 'lucide-react'
 import { sendChatMessage, fetchChatHistory, getClientId } from '../api/client'
 
-const WELCOME_MESSAGE = {
+const WELCOME = {
   role: 'assistant',
-  content: "Hi! I'm StockBuddy's AI. Ask me about any stock — sentiment scores, P/E ratios, dividends, analyst ratings, or what's behind a recommendation.",
+  content: "Welcome to StockBuddy AI. Ask me about any stock — sentiment scores, P/E ratios, dividends, analyst ratings, or what's driving a recommendation.",
 }
 
 export default function ChatPage() {
-  const [clientId] = useState(() => getClientId())
-  const [messages, setMessages] = useState([WELCOME_MESSAGE])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const bottomRef = useRef(null)
+  const [clientId]                  = useState(() => getClientId())
+  const [messages, setMessages]     = useState([WELCOME])
+  const [input, setInput]           = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState(null)
+  const bottomRef                   = useRef(null)
 
   useEffect(() => {
     let active = true
-    async function load() {
-      try {
-        const saved = await fetchChatHistory(clientId)
-        if (active && saved?.length) setMessages(saved)
-      } catch { /* silent -- starting fresh is fine */ }
-    }
-    load()
+    fetchChatHistory(clientId).then((saved) => {
+      if (active && saved?.length) setMessages(saved)
+    }).catch(() => {})
     return () => { active = false }
   }, [clientId])
 
@@ -35,33 +31,35 @@ export default function ChatPage() {
     e.preventDefault()
     const text = input.trim()
     if (!text || loading) return
-
     setMessages((prev) => [...prev, { role: 'user', content: text }])
     setInput('')
     setLoading(true)
     setError(null)
-
     try {
       const data = await sendChatMessage(text, clientId)
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }])
     } catch {
-      setError('Could not reach the assistant. Make sure the backend is running.')
+      setError('Could not reach the assistant. Make sure app.py is running.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div>
+      <div className="page-hero">
+        <div className="page-hero__eyebrow">AI Assistant</div>
+        <h1 className="page-hero__title">StockBuddy AI</h1>
+        <p className="page-hero__sub">Powered by Llama 3.3 · FinBERT · yfinance · Conversations saved on this device</p>
+      </div>
+
       <div className="chat-container">
-        {/* Header */}
         <div className="chat-header">
           <span className="chat-header__dot" />
           <span className="chat-header__name">StockBuddy AI</span>
-          <span className="chat-header__model">Llama 3.3 · FinBERT · yfinance</span>
+          <span className="chat-header__model">llama-3.3-70b · finbert · yfinance</span>
         </div>
 
-        {/* Messages */}
         <div className="chat__window">
           {messages.map((m, i) => (
             <div key={i} className={`chat__bubble chat__bubble--${m.role}`}>
@@ -70,7 +68,7 @@ export default function ChatPage() {
           ))}
           {loading && (
             <div className="chat__bubble chat__bubble--assistant chat__bubble--loading">
-              <Loader2 size={14} className="spin" />
+              <Loader2 size={13} className="spin" />
               Analyzing…
             </div>
           )}
@@ -79,11 +77,10 @@ export default function ChatPage() {
 
         {error && <p className="chat__error">{error}</p>}
 
-        {/* Input */}
         <form className="chat__form" onSubmit={handleSend}>
           <input
             className="chat__input"
-            placeholder="Ask about any stock — e.g. 'What risks does Tesla face?'"
+            placeholder="Ask about any stock — e.g. 'What risks does NVDA face right now?'"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={loading}
@@ -94,18 +91,15 @@ export default function ChatPage() {
         </form>
 
         <p className="chat__disclaimer-note">
-          Conversations saved on this device only.
+          Real data · Not financial advice
         </p>
       </div>
 
-      {/* Prominent disclaimer matching wireframe */}
-      <div className="disclaimer">
-        <TriangleAlert size={16} />
+      <div className="disclaimer" style={{ marginTop: 20 }}>
+        <TriangleAlert size={15} />
         <p>
-          <strong>⚠️ Important Disclaimer:</strong> StockBuddy AI provides analysis
-          based on news sentiment only. This is <u>NOT financial advice</u>. Do not make
-          investment decisions solely based on this tool. Always consult a licensed
-          financial advisor and conduct your own independent research.
+          <strong style={{ color: 'var(--gold)' }}>Disclaimer:</strong> StockBuddy AI provides analysis based on news sentiment only.
+          This is NOT financial advice. Always consult a licensed financial advisor before making investment decisions.
         </p>
       </div>
     </div>
