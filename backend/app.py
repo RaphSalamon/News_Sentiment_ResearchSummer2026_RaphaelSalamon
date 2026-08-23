@@ -12,7 +12,7 @@ from watchlist import get_watchlist_data
 from finviz_auth import pull_screener
 
 app = Flask(__name__)
-CORS(app, origins="*")
+CORS(app, origins=["https://news-sentiment-research-summer2026.vercel.app", "http://localhost:5173"])
 
 
 @app.route('/')
