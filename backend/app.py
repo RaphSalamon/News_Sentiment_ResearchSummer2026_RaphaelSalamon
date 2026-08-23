@@ -12,7 +12,7 @@ from watchlist import get_watchlist_data
 from finviz_auth import pull_screener
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins="*")
 
 
 @app.route('/')
