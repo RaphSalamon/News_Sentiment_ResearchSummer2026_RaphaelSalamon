@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Loader2, TriangleAlert } from 'lucide-react'
 import { sendChatMessage, fetchChatHistory, getClientId } from '../api/client'
+import ReactMarkdown from 'react-markdown'
 
 const WELCOME = {
   role: 'assistant',
@@ -8,12 +9,12 @@ const WELCOME = {
 }
 
 export default function ChatPage() {
-  const [clientId]                  = useState(() => getClientId())
-  const [messages, setMessages]     = useState([WELCOME])
-  const [input, setInput]           = useState('')
-  const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState(null)
-  const bottomRef                   = useRef(null)
+  const [clientId]              = useState(() => getClientId())
+  const [messages, setMessages] = useState([WELCOME])
+  const [input, setInput]       = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState(null)
+  const bottomRef               = useRef(null)
 
   useEffect(() => {
     let active = true
@@ -50,22 +51,25 @@ export default function ChatPage() {
       <div className="page-hero">
         <div className="page-hero__eyebrow">AI Assistant</div>
         <h1 className="page-hero__title">StockBuddy AI</h1>
-        <p className="page-hero__sub">Powered by Llama 3.3 · FinBERT · yfinance · Conversations saved on this device</p>
+        <p className="page-hero__sub">Powered by GPT-OSS · FinBERT · yfinance · Conversations saved on this device</p>
       </div>
 
       <div className="chat-container">
         <div className="chat-header">
           <span className="chat-header__dot" />
           <span className="chat-header__name">StockBuddy AI</span>
-          <span className="chat-header__model">llama-3.3-70b · finbert · yfinance</span>
+          <span className="chat-header__model">gpt-oss-120b · finbert · yfinance</span>
         </div>
 
         <div className="chat__window">
           {messages.map((m, i) => (
             <div key={i} className={`chat__bubble chat__bubble--${m.role}`}>
-              {m.content}
+              {m.role === 'assistant'
+                ? <ReactMarkdown>{m.content}</ReactMarkdown>
+                : m.content}
             </div>
           ))}
+
           {loading && (
             <div className="chat__bubble chat__bubble--assistant chat__bubble--loading">
               <Loader2 size={13} className="spin" />
