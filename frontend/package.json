@@ -11,11 +11,12 @@
   "dependencies": {
     "axios": "^1.7.7",
     "lucide-react": "^0.460.0",
+    "plotly.js-dist-min": "^2.35.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^2.12.7",
+    "react-markdown": "^10.1.0",
     "react-plotly.js": "^2.6.0",
-    "plotly.js-dist-min": "^2.35.2"
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.3",
