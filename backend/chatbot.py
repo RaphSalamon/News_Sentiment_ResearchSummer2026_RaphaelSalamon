@@ -137,22 +137,21 @@ TOOLS: list[dict[str, Any]] = [
 
 
 def get_sentiment_score(ticker, company_name):
-    headlines = search_ticker(ticker, company_name)
-    if not headlines:
-        return {"error": f"No recent headlines found for {ticker}."}
-    headlines = filter_relevant_headlines(headlines)
-    score = analyze_headlines(headlines)
-    label = classify_sentiment(score).strip()
-    return {
-        "ticker": ticker,
-        "sentiment_score": round(float(score), 4),
-        "verdict": label,
-        "headline_count": len(headlines),
-        "note": (
-            "Score > +0.15 = BUY, < -0.15 = AVOID, in between = HOLD. "
-            "Based on recent news headlines only."
-        )
-    }
+    try:
+        headlines = search_ticker(ticker, company_name)
+        if not headlines:
+            return {"error": f"No recent headlines found for {ticker}."}
+        headlines = filter_relevant_headlines(headlines)
+        score = analyze_headlines(headlines)
+        label = classify_sentiment(score).strip()
+        return {
+            "ticker": ticker,
+            "score": round(float(score), 4),
+            "label": label,
+            "headline_count": len(headlines)
+        }
+    except Exception as e:
+        return {"error": f"Sentiment analysis failed: {str(e)}"}
 
 
 def get_fundamentals_data(ticker):
