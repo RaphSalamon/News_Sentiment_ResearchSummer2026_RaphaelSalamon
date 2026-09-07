@@ -75,6 +75,9 @@ def chat_route():
             save_chat_history(client_id, updated)
         return jsonify({"reply": reply})
     except Exception as e:
+        import traceback
+        print(f"CHAT ERROR: {str(e)}")
+        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
 
