@@ -96,6 +96,8 @@ def pull_screener(
 
     if us_only:
         filters.append("geo_usa")
+        # Only properly listed stocks on major exchanges (excludes OTC/delisted)
+    filters.append("sh_opt_option")  # optionable = listed on major exchange
 
     params = {
         "v":    "111",
