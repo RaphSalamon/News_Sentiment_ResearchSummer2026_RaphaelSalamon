@@ -32,7 +32,7 @@ if GROQ_API_KEY is None:
     raise ValueError("no Groq API key -- set GROQ_API_KEY in .env")
 
 client = Groq(api_key=GROQ_API_KEY)
-MODEL = "llama3-70b-8192"
+MODEL = "openai/gpt-oss-120b"
 
 SYSTEM_PROMPT = """You are a financial analyst assistant for a stock sentiment research tool.
 You have access to real, live data including news sentiment scores, P/E ratios, dividends,
